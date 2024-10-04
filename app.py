@@ -17,10 +17,53 @@ class Pokemon(db.Model):
     sprites = db.Column(db.String(200))
     types = db.Column(db.String(100))
 
+def populate_database():
+    url = 'https://pokeapi.co/api/v2/pokemon?limit=1302'  # Total number of Pokémon
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        for index, result in enumerate(data['results']):
+            pokemon_url = result['url']
+            pokemon_data = requests.get(pokemon_url).json()
+
+            name = pokemon_data['name']
+            pokedex_number = pokemon_data['id']
+            abilities = ','.join([ability['ability']['name'] for ability in pokemon_data['abilities']])
+            sprites = pokemon_data['sprites']['front_default']
+            types = ','.join([t['type']['name'] for t in pokemon_data['types']])
+
+            # Check if the Pokémon is already in the database to avoid duplicates
+            if not Pokemon.query.filter_by(name=name).first():
+                new_pokemon = Pokemon(
+                    name=name,
+                    pokedex_number=pokedex_number,
+                    abilities=abilities,
+                    sprites=sprites,
+                    types=types
+                )
+                db.session.add(new_pokemon)
+
+            # Commit every 100 Pokémon to reduce the number of transactions
+            if index % 100 == 0:
+                db.session.commit()
+
+        db.session.commit()
+
+
 #Crear la base de datos para la persistencia
-@app.before_request
 def create_tables():
     db.create_all()
+
+    # Revisa el numero de pokemones
+    pokemon_count = Pokemon.query.count()
+
+    if pokemon_count == 0:
+        print("Database esta vacia, llenando con Pokémon data...")
+        populate_database()  # Popular la database con data
+    else:
+        print("Database ya tiene info, saltando data population.")
+
+
 
 @app.route('/')
 def hello_world():  # put application's code here
@@ -31,7 +74,7 @@ Ruta del API general
 """
 @app.route('/api/pokemon', methods=['GET'])
 def general():
-    response = requests.get('https://pokeapi.co/api/v2/pokemon?limit=20')
+    response = requests.get('https://pokeapi.co/api/v2/pokemon?limit=1302')
     data = response.json()
     results = [{"name": pokemon["name"], "url": pokemon["url"]} for pokemon in data['results']]
     return jsonify(results)
@@ -62,10 +105,10 @@ def specific(id_or_name):
             # Return desde local DB
             return jsonify({
                 "nombre": pokemon.name,
-                "habilidades": pokemon.abilities.split(','),
+                "habilidades": pokemon.abilities,
                 "pokedex": pokemon.pokedex_number,
                 "sprites": pokemon.sprites,
-                "tipo": pokemon.types.split(',')
+                "tipo": pokemon.types
             })
     elif request.method == 'PUT':
         if not pokemon:
@@ -73,9 +116,9 @@ def specific(id_or_name):
 
         data = request.json
         pokemon.name = data.get('nombre',pokemon.name)
-        pokemon.abilities = ','.join(data.get('habilidades', []))
+        pokemon.abilities = data.get('habilidades', pokemon.abilities)
         pokemon.sprites = data.get('sprites', pokemon.sprites)
-        pokemon.types = ','.join(data.get('tipo', []))
+        pokemon.types = data.get('tipo',pokemon.types)
         db.session.commit()
         return jsonify({"message": "Pokémon modificado correctamente"}), 200
 
