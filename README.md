@@ -46,7 +46,7 @@ flask run
 
 ## Pruebas Unitarias
 La aplicación incluye pruebas unitarias para verificar el correcto funcionamiento de las rutas de la API. Las pruebas están escritas utilizando el framework pytest.
-(Solo en la rama persistent)
+(Solo para la rama persistent)
 ### 1. Ejecutar pruebas
 ```bash
 pytest
